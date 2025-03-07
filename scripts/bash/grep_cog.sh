@@ -1,0 +1,1 @@
+cat <(zcat $2 | head -n1) <(zcat $2 | grep -w $1)
