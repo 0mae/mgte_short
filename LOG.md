@@ -384,17 +384,20 @@ zcat data/tsv/interproscan_PF01769_interproID_range_num_tophits_gtdbtax.tsv.gz |
 
 ## Analyze MgtE domain architecture
 
-- [IPR006667](https://www.ebi.ac.uk/interpro/entry/InterPro/IPR006667/)
-  - SLC41A/MgtE, integral membrane domain (SLC41_membr_dom)
-- [IPR046342](https://www.ebi.ac.uk/interpro/entry/InterPro/IPR046342/)
-  - CBS domain superfamily (CBS_dom_sf)
-- [IPR006668](https://www.ebi.ac.uk/interpro/entry/InterPro/IPR006668/)
-  - Magnesium transporter, MgtE intracellular domain
-    (Mg_transptr_MgtE_intracell_dom)
+- Domain classification
+  - [IPR006667](https://www.ebi.ac.uk/interpro/entry/InterPro/IPR006667/)
+    - SLC41A/MgtE, integral membrane domain (SLC41_membr_dom)
+  - [IPR046342](https://www.ebi.ac.uk/interpro/entry/InterPro/IPR046342/)
+    - CBS domain superfamily (CBS_dom_sf)
+  - [IPR006668](https://www.ebi.ac.uk/interpro/entry/InterPro/IPR006668/)
+    - Magnesium transporter, MgtE intracellular domain
+      (Mg_transptr_MgtE_intracell_dom)
 
 ``` {r}
-#| label: analyze_mgte_domain_architecture
+#| label: domain_classification
 library(tidyverse)
+library(ggupset)
+source("scripts/r/theme_set_1.R")
 system("mkdir -p png")
 
 df_PF01769 <- read.csv("data/tsv/interproscan_PF01769_interproID_range_num_tophits_gtdbtax.tsv.gz", header = TRUE, sep = "\t", quote = "", na.strings=c("", "NULL", "-")) %>% as_tibble()
@@ -434,21 +437,171 @@ df_PF01769_MgtE_2 <- df_PF01769_MgtE %>% filter(interpro_acc %in% c("IPR006667",
       "MgtE_dCBS_dN"
     }
   )) %>% unnest(variant) %>% ungroup()
-df_PF01769_MgtE_2$variant <- factor(df_PF01769_MgtE_2$variant, levels = rev(c("MgtE", "MgtE_dCBS_dN", "MgtE_dN", "MgtE_dCBS")))
+df_PF01769_MgtE_2$variant <- factor(df_PF01769_MgtE_2$variant, levels = rev(c("MgtE", "MgtE_dN", "MgtE_dCBS", "MgtE_dCBS_dN")))
 p_PF01769_MgtE_2_prot <- df_PF01769_MgtE_2 %>% group_by(variant) %>% summarize(n_proteins = dplyr::n()) %>% 
   ggplot(aes(x = n_proteins, y = variant)) +
   geom_bar(stat = "identity")
 ggsave(paste0("png/PF01769_MgtE_2_prot.png"), p_PF01769_MgtE_2_prot, height = 3, width = 3.5, dpi = 300)
+
+# Table (Taxonomy)
+df_PF01769_MgtE_2 %>% group_by(variant,Domain) %>% summarize(n_proteins = dplyr::n()) %>% 
+  arrange(desc(variant)) %>% pivot_wider(names_from = "Domain", values_from = "n_proteins", values_fill = 0) %>% 
+  mutate(Total = d__Archaea + d__Bacteria) %>% knitr::kable()
+
+# MgtE protein length
+set.seed(1234)
+p_PF01769_MgtE_2_len <- df_PF01769_MgtE_2 %>%
+  ggplot(aes(x = seq_len, y = variant)) +
+  geom_point(position = position_jitter(), color = "grey70", alpha = 0.5, size = 0.01) +
+  geom_violin(fill = "grey90", draw_quantiles = c(0.5)) 
+ggsave(paste0("png/PF01769_MgtE_2_len.png"), p_PF01769_MgtE_2_len, height = 3, width = 3.5, dpi = 300)
+
+# Table
+df_PF01769_MgtE_2 %>% group_by(variant) %>% 
+  summarize(len_min = min(seq_len), len_max = max(seq_len), len_mean = mean(seq_len), len_median = median(seq_len)) %>% 
+  arrange(desc(variant)) %>% knitr::kable()
 ```
 
-<img src="png/PF01769_MgtE_three_part_upset.png" width="50%"><img src="png/PF01769_MgtE_2_prot.png" width="35%">
+- Domain composition
 
-``` {bash}
-# Extract
-qsub -q SMALL -m abe -M $Email -l select=1:ncpus=10:mem=5gb -l walltime=12:00:00 -e qsub/cpnet_240325_nfs_share_e -o qsub/cpnet_240325_nfs_share_o qsub/cpnet_240325_nfs_share.sh
-{
-cd $PBS_O_WORKDIR
-mkdir -p tmp
-time tar -zxvf cpnet_240325_nfs_share.tar.gz -C tmp
-}
+<img src="png/PF01769_MgtE_three_part_upset.png" width="50%">
+
+- The number of proteins
+
+<img src="png/PF01769_MgtE_2_prot.png" width="35%">
+
+| variant      | d\_\_Archaea | d\_\_Bacteria | Total |
+|:-------------|-------------:|--------------:|------:|
+| MgtE         |           82 |         19690 | 19772 |
+| MgtE_dN      |           71 |           979 |  1050 |
+| MgtE_dCBS    |            0 |            11 |    11 |
+| MgtE_dCBS_dN |          964 |           591 |  1555 |
+
+- Length of proteins
+
+<img src="png/PF01769_MgtE_2_len.png" width="35%">
+
+| variant      | len_min | len_max | len_mean | len_median |
+|:-------------|--------:|--------:|---------:|-----------:|
+| MgtE         |     222 |     781 | 459.9193 |        456 |
+| MgtE_dN      |     148 |     559 | 345.4229 |        337 |
+| MgtE_dCBS    |     239 |     546 | 363.0909 |        308 |
+| MgtE_dCBS_dN |      35 |     485 | 234.5961 |        193 |
+
+- Detailed domain architecture
+
+``` {r}
+#| label: domain_architecture
+library(tidyverse)
+library(patchwork)
+library(Biostrings)
+source("scripts/r/theme_set_1.R")
+
+df_PF01769 <- read.csv("data/tsv/interproscan_PF01769_interproID_range_num_tophits_gtdbtax.tsv.gz", header = TRUE, sep = "\t", quote = "", na.strings=c("", "NULL", "-")) %>% as_tibble()
+
+#### Classification based on domain composition ####
+# Upset plot of Mg2 transporter three-partitioned domains ("IPR006667", "IPR046342", "IPR006668") organization
+df_PF01769_MgtE <- df_PF01769 %>% group_by(prodigal_acc) %>% nest() %>% 
+  mutate(MgtE_presence = map(data, ~ if (intersect(.x$interpro_acc, c("IPR006667")) %>% length() > 0) {TRUE})) %>% 
+  unnest(MgtE_presence) %>% select(-MgtE_presence) %>% unnest(data) %>% ungroup()
+
+# The number of MgtE proteins
+df_PF01769_MgtE_2 <- df_PF01769_MgtE %>% filter(interpro_acc %in% c("IPR006667", "IPR046342", "IPR006668")) %>%
+  group_by(prodigal_acc,seq_len) %>% 
+  distinct(interpro_acc,Domain,Phylum,Class,Order,Family,Genus,Species,accession) %>% ungroup() %>% 
+  group_by(prodigal_acc,seq_len,Domain,Phylum,Class,Order,Family,Genus,Species,accession) %>% 
+  summarize(interpro_names = list(interpro_acc)) %>%
+  mutate(variant = map(
+    interpro_names, ~ if (intersect(.x, c("IPR006667", "IPR046342", "IPR006668")) %>% length() == 3) {
+      "MgtE"
+    } else if (intersect(.x, c("IPR006667", "IPR046342")) %>% length() == 2) {
+      "MgtE_dN"
+    } else if (intersect(.x, c("IPR006667", "IPR006668")) %>% length() == 2) {
+      "MgtE_dCBS"
+    } else if (intersect(.x, c("IPR006667")) %>% length() == 1) {
+      "MgtE_dCBS_dN"
+    }
+  )) %>% unnest(variant) %>% ungroup()
+df_PF01769_MgtE_2$variant <- factor(df_PF01769_MgtE_2$variant, levels = rev(c("MgtE", "MgtE_dN", "MgtE_dCBS", "MgtE_dCBS_dN")))
+
+#### Domain architecture of MgtE_dCBS_dN ####
+acc_tm_only <- df_PF01769_MgtE_2 %>% filter(variant == "MgtE_dCBS_dN") %>% select(prodigal_acc) %>% pull()
+
+df_PF01769_MgtE_dCBS_dN <- df_PF01769_MgtE %>% 
+  filter(prodigal_acc %in% acc_tm_only) %>% 
+  group_by(prodigal_acc,seq_len,accession,Domain,Phylum,Class,Order,Family,Genus,Species) %>% 
+  summarize(interpro_acc_rng = list(paste(interpro_acc, range_num, sep = "_"))) %>% 
+  mutate(MgtE_subtype = map(
+    interpro_acc_rng, ~ if (length(intersect(.x, c("IPR006667_1", "IPR006667_2"))) == 2) {
+      "TM_TM"
+    } else if (length(intersect(.x, c("IPR006667_1"))) == 1) {
+      "TM"
+    } else {
+      "Others"
+    }
+  )) %>% unnest(MgtE_subtype) %>% ungroup()
+df_PF01769_MgtE_dCBS_dN$MgtE_subtype <- factor(df_PF01769_MgtE_dCBS_dN$MgtE_subtype, levels = rev(c("TM", "TM_TM", "Others")))
+
+# Table (Number of proteins)
+df_PF01769_MgtE_dCBS_dN %>% group_by(MgtE_subtype,Domain) %>% summarize(n_proteins = dplyr::n()) %>%
+  pivot_wider(names_from = "Domain", values_from = "n_proteins", values_fill = 0) %>% 
+  arrange(desc(MgtE_subtype)) %>%
+  mutate(Total = d__Archaea + d__Bacteria) %>% knitr::kable()
+
+# Length of MgtE subtypes
+# set.seed(1234)
+# PF01769_MgtE_dCBS_dN_len <- df_PF01769_MgtE_dCBS_dN %>% 
+#   ggplot(aes(x = seq_len, y = fct_rev(MgtE_subtype))) +
+#   geom_point(position = position_jitter(), color = "grey70", alpha = 0.5, size = 0.01) +
+#   geom_violin(fill = "grey90", draw_quantiles = c(0.5)) 
+# ggsave(paste0("png/PF01769_MgtE_dCBS_dN_len.png"), PF01769_MgtE_dCBS_dN_len, height = 3, width = 3.5, dpi = 300)
+# Density
+PF01769_MgtE_dCBS_dN_len_dens <- df_PF01769_MgtE_dCBS_dN %>%
+  ggplot(aes(x = seq_len, color = MgtE_subtype)) +
+  geom_density() +
+  xlim(0,500) +
+  scale_color_manual(values = color_gp)
+# Point
+set.seed(1234)
+PF01769_MgtE_dCBS_dN_len_point <- df_PF01769_MgtE_dCBS_dN %>%
+  ggplot(aes(x = seq_len, y = MgtE_subtype, color = MgtE_subtype)) +
+  geom_point(position = position_jitter(), alpha = 0.5, size = 0.01) +
+  xlim(0,500) +
+  scale_color_manual(values = color_gp)
+# Combine
+PF01769_MgtE_dCBS_dN_len <- 
+  (PF01769_MgtE_dCBS_dN_len_dens / PF01769_MgtE_dCBS_dN_len_point) + plot_layout(heights = c(4, 1))
+# Export
+ggsave(paste0("png/PF01769_MgtE_dCBS_dN_len.png"), PF01769_MgtE_dCBS_dN_len, height = 4, width = 5.5, dpi = 300)
+
+# Table
+df_PF01769_MgtE_dCBS_dN %>% group_by(MgtE_subtype) %>% 
+  summarize(len_min = min(seq_len), len_max = max(seq_len), len_mean = mean(seq_len), len_median = median(seq_len)) %>% 
+  arrange(desc(MgtE_subtype)) %>% knitr::kable()
+
+#### Export MgtE_dCBS_dN tsv ####
+# Load aa sequences
+seq_PF01769 <- readAAStringSet("data/seqs_pfam/hmmsearch_PF01769.faa.gz", "fasta")
+# Combine
+df_PF01769_MgtE_dCBS_dN_tsv <- df_PF01769_MgtE_dCBS_dN %>% 
+  select(prodigal_acc,seq_len,MgtE_subtype,accession,Domain,Phylum,Species) %>% 
+  mutate(seq = seq_PF01769[df_PF01769_MgtE_dCBS_dN$prodigal_acc] %>% as.character)
+# Export
+write.table(df_PF01769_MgtE_dCBS_dN_tsv, "suppl/MgtE_dCBS_dN.tsv", row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
 ```
+
+- The number of proteins
+
+| MgtE_subtype | d\_\_Archaea | d\_\_Bacteria | Total |
+|:-------------|-------------:|--------------:|------:|
+| TM           |          723 |           526 |  1249 |
+| TM_TM        |          241 |            65 |   306 |
+
+- Length of proteins
+
+<img src="png/PF01769_MgtE_dCBS_dN_len.png" width="50%">
+
+| MgtE_subtype | len_min | len_max | len_mean | len_median |
+|:-------------|--------:|--------:|---------:|-----------:|
+| TM           |      35 |     392 | 191.5572 |        191 |
+| TM_TM        |     340 |     485 | 410.2680 |        407 |

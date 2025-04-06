@@ -2,6 +2,7 @@ qsub_out/
 sbatch_out/
 db/
 data/
+raw/
 .local/
 .config/
 .Rhistory
