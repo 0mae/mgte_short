@@ -520,23 +520,48 @@ df_PF01769_MgtE_2 <- df_PF01769_MgtE %>% filter(interpro_acc %in% c("IPR006667",
   )) %>% unnest(variant) %>% ungroup()
 df_PF01769_MgtE_2$variant <- factor(df_PF01769_MgtE_2$variant, levels = rev(c("MgtE", "MgtE_dN", "MgtE_dCBS", "MgtE_dCBS_dN")))
 
+#### Define domain architecture ####
+df_PF01769_MgtE_3 <- df_PF01769_MgtE %>% 
+  group_by(prodigal_acc,seq_len,accession,Domain,Phylum,Class,Order,Family,Genus,Species) %>% 
+  summarize(interpro_acc_rng = list(paste(interpro_acc, range_num, sep = "_"))) %>% 
+ mutate(MgtE_subtype = map(
+   interpro_acc_rng, ~ if (length(intersect(.x, c("IPR006667_1", "IPR046342_1", "IPR006668_1", "IPR006668_2"))) == 4) {
+     "TM_CBS_N_N"
+   } else if (length(intersect(.x, c("IPR006667_1", "IPR046342_1", "IPR006668_1"))) == 3) {
+     "TM_CBS_N"
+   } else if (length(intersect(.x, c("IPR006667_1", "IPR006668_1", "IPR006668_2"))) == 3) {
+     "TM_N_N"
+   } else if (length(intersect(.x, c("IPR006667_1", "IPR046342_1"))) == 2) {
+     "TM_CBS"
+   } else if (length(intersect(.x, c("IPR006667_1", "IPR006667_2"))) == 2) {
+     "TM_TM"
+   } else if (length(intersect(.x, c("IPR006667_1", "IPR006668_1"))) == 2) {
+     "TM_N"
+   } else if (length(intersect(.x, c("IPR006667_1"))) == 1) {
+     "TM"
+   } else {
+     "Others"
+   }
+ )) %>% unnest(MgtE_subtype) %>% ungroup()
+df_PF01769_MgtE_3$MgtE_subtype <- factor(df_PF01769_MgtE_3$MgtE_subtype, levels = rev(c("TM_CBS_N", "TM_CBS_N_N", "TM_CBS", "TM_N", "TM_N_N", "TM", "TM_TM", "Others")))
+
+# Export domain architecture tsv
+# Load aa sequences
+seq_PF01769 <- readAAStringSet("data/seqs_pfam/hmmsearch_PF01769.faa.gz", "fasta")
+# Combine
+df_domain_architecture <- df_PF01769_MgtE_3 %>% 
+  select(prodigal_acc,seq_len,MgtE_subtype,accession,Domain,Phylum,Species) %>% 
+  mutate(seq = seq_PF01769[df_PF01769_MgtE_3$prodigal_acc] %>% as.character)
+# Export
+write.table(df_domain_architecture, "suppl/MgtE_domain_architecture.tsv", row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+# Compress
+system("cat suppl/MgtE_domain_architecture.tsv | gzip > suppl/MgtE_domain_architecture.tsv.gz && rm suppl/MgtE_domain_architecture.tsv")
+
 #### Domain architecture of MgtE_dCBS_dN ####
 acc_tm_only <- df_PF01769_MgtE_2 %>% filter(variant == "MgtE_dCBS_dN") %>% select(prodigal_acc) %>% pull()
 
-df_PF01769_MgtE_dCBS_dN <- df_PF01769_MgtE %>% 
-  filter(prodigal_acc %in% acc_tm_only) %>% 
-  group_by(prodigal_acc,seq_len,accession,Domain,Phylum,Class,Order,Family,Genus,Species) %>% 
-  summarize(interpro_acc_rng = list(paste(interpro_acc, range_num, sep = "_"))) %>% 
-  mutate(MgtE_subtype = map(
-    interpro_acc_rng, ~ if (length(intersect(.x, c("IPR006667_1", "IPR006667_2"))) == 2) {
-      "TM_TM"
-    } else if (length(intersect(.x, c("IPR006667_1"))) == 1) {
-      "TM"
-    } else {
-      "Others"
-    }
-  )) %>% unnest(MgtE_subtype) %>% ungroup()
-df_PF01769_MgtE_dCBS_dN$MgtE_subtype <- factor(df_PF01769_MgtE_dCBS_dN$MgtE_subtype, levels = rev(c("TM", "TM_TM", "Others")))
+df_PF01769_MgtE_dCBS_dN <- df_PF01769_MgtE_3 %>% 
+  filter(prodigal_acc %in% acc_tm_only)
 
 # Table (Number of proteins)
 df_PF01769_MgtE_dCBS_dN %>% group_by(MgtE_subtype,Domain) %>% summarize(n_proteins = dplyr::n()) %>%
@@ -576,11 +601,11 @@ df_PF01769_MgtE_dCBS_dN %>% group_by(MgtE_subtype) %>%
   arrange(desc(MgtE_subtype)) %>% knitr::kable()
 
 #### Export MgtE_dCBS_dN tsv ####
-# Load aa sequences
-seq_PF01769 <- readAAStringSet("data/seqs_pfam/hmmsearch_PF01769.faa.gz", "fasta")
+# # Load aa sequences
+# seq_PF01769 <- readAAStringSet("data/seqs_pfam/hmmsearch_PF01769.faa.gz", "fasta")
 # Combine
-df_PF01769_MgtE_dCBS_dN_tsv <- df_PF01769_MgtE_dCBS_dN %>% 
-  select(prodigal_acc,seq_len,MgtE_subtype,accession,Domain,Phylum,Species) %>% 
+df_PF01769_MgtE_dCBS_dN_tsv <- df_PF01769_MgtE_dCBS_dN %>%
+  select(prodigal_acc,seq_len,MgtE_subtype,accession,Domain,Phylum,Species) %>%
   mutate(seq = seq_PF01769[df_PF01769_MgtE_dCBS_dN$prodigal_acc] %>% as.character)
 # Export
 write.table(df_PF01769_MgtE_dCBS_dN_tsv, "suppl/MgtE_dCBS_dN.tsv", row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
